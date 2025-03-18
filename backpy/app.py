@@ -39,7 +39,7 @@ def transcribe():
 
     result = model.transcribe(audio_path)
     os.remove(audio_path)
-
+# AQUI FALTA EU SALVAR O ARQUIVO DE AUDIO TBM
     new_transcription = Transcription(mock_code=mock_code, transcription='text', resolution=resolution)
     db.session.add(new_transcription)
     db.session.commit()
