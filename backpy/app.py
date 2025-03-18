@@ -6,13 +6,23 @@ from flask_cors import CORS
 import requests
 from dotenv import load_dotenv
 import json
+from flask_sqlalchemy import SQLAlchemy
+from models.practice import Practice
+from models.question import Question
 
+from models.transcription import Transcription
 load_dotenv()
+app = Flask(__name__)
+CORS(app)
+app.config['SQLALCHEMY_DATABASE_URI'] =  os.getenv('DATABASE_URI')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+
 
 api_key = os.getenv('API_KEY')
 print(api_key)
-app = Flask(__name__)
-CORS(app)
 model = whisper.load_model("base")  # Modelo que suporta português
 # esse endpoint vai ser usado de 5 em 5 min
 # ele preciso receber o que a pessoa digitou rbm
@@ -23,14 +33,18 @@ def transcribe():
 
     audio_file = request.files['file']
     audio_path = os.path.join('uploads', audio_file.filename)
+    mock_code = request.form.get('mock_code')
+    resolution = request.form.get('resolution')
     audio_file.save(audio_path)
 
     result = model.transcribe(audio_path)
     os.remove(audio_path)
-# aqui vai salvar a transcricao no banco e tbm o codigo da pessoa
 
+    new_transcription = Transcription(mock_code=mock_code, transcription='text', resolution=resolution)
+    db.session.add(new_transcription)
+    db.session.commit()
     return jsonify({"text": result['text']})
-
+    # return ""
 @app.route('/test-api', methods=['GET'])
 def test_api():
     print("chegando aqui ")
@@ -65,8 +79,7 @@ def submit_question():
     if not question:
         return jsonify({"error": "No question provided"}), 400
 
-    # Aqui você pode processar a questão conforme necessário
-    # Por exemplo, retornar uma resposta ou análise simples
+    
     #aqui preciso salvar no banco de dados 
     #depois vou chamar o whisper que fica ouvindo a pessoa
     
@@ -80,6 +93,9 @@ def submit_question():
     return jsonify(response), 200
     
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+
     if not os.path.exists('uploads'):
         os.makedirs('uploads')
     app.run(debug=True, host='127.0.0.1', port=5000)
