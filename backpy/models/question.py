@@ -14,7 +14,6 @@ class Question(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     description = Column(String, nullable=False)
     topic = Column(String, nullable=False)
-    audioTranscription = Column(String)  # Campo opcional para transcrição de áudio
 
     # Relação OneToMany com PracticeEntity, assumindo que você também traduzirá essa entidade
     practices = relationship("Practice", back_populates="question")

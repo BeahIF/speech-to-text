@@ -13,7 +13,9 @@ class Practice(Base):
     data = Column(Date, nullable=False)
     feedback = Column(Text, nullable=True)
     status = Column(String(20), nullable=True)
+    language = Column(String(50), nullable=False)
 
-    question_id = Column(UUID(as_uuid=True), ForeignKey('questions.id'))
+
+    questionId = Column(UUID(as_uuid=True), ForeignKey('questions.id'))
     question = relationship("Question", back_populates="practices")
 

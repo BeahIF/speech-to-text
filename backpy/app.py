@@ -6,45 +6,67 @@ from flask_cors import CORS
 import requests
 from dotenv import load_dotenv
 import json
-from flask_sqlalchemy import SQLAlchemy
+from db import db
+
 from models.practice import Practice
 from models.question import Question
-
 from models.transcription import Transcription
+from routes.question import question_bp
+from routes.transcribe import transcribe_bp
+
 load_dotenv()
 app = Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] =  os.getenv('DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
 
-db = SQLAlchemy(app)
 
+app.register_blueprint(question_bp)
+app.register_blueprint(transcribe_bp)
 
 
 api_key = os.getenv('API_KEY')
 print(api_key)
 model = whisper.load_model("base")  # Modelo que suporta português
 # esse endpoint vai ser usado de 5 em 5 min
-# ele preciso receber o que a pessoa digitou rbm
+# ele preciso receber o que a pessoa digitou e o que ela falou
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
+    print("iniciando transcrive")
     if 'file' not in request.files:
         return jsonify({"error": "Nenhum arquivo enviado"}), 400
 
     audio_file = request.files['file']
-    audio_path = os.path.join('uploads', audio_file.filename)
+    print("Arquivo recebido:", audio_file)
+    print("Nome do arquivo:", audio_file.filename)
     mock_code = request.form.get('mock_code')
+    print("mock code", mock_code)
     resolution = request.form.get('resolution')
+  
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads')
+    print("Caminho do diretório de upload:", upload_folder)
+
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder)
+        print("Criado diretório:", upload_folder)
+    filename = audio_file.filename
+    audio_path = os.path.join(upload_folder, filename)
+    print("Salvando arquivo em:", audio_path)
+
     audio_file.save(audio_path)
 
     result = model.transcribe(audio_path)
+    print("Result", result)
     os.remove(audio_path)
-# AQUI FALTA EU SALVAR O ARQUIVO DE AUDIO TBM
-    new_transcription = Transcription(mock_code=mock_code, transcription='text', resolution=resolution)
+    new_transcription = Transcription(mock_code=mock_code, transcription=result['text'], resolution=resolution)
     db.session.add(new_transcription)
     db.session.commit()
     return jsonify({"text": result['text']})
-    # return ""
+
 @app.route('/test-api', methods=['GET'])
 def test_api():
     print("chegando aqui ")
