@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from flask import Blueprint, request, jsonify
 from db import db
 from models.practice import Practice
@@ -6,10 +7,15 @@ import os
 import whisper
 from werkzeug.utils import secure_filename
 import requests
+# from gtts import gTTS
+import pyttsx3
 
+from flask import send_file
+import uuid
+load_dotenv()
 transcribe_bp = Blueprint('transcribe', __name__)
 model = whisper.load_model("base")
-
+api_key = os.getenv("API_KEY")  # Ou o nome real da sua variável
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -48,20 +54,29 @@ def transcribe():
     )
     db.session.add(new_transcription)
     db.session.flush()
+    # EU ACHO QUE ESSE PROMPT SÓ SERVE PARA O FINAL DA ENTREVISTA
+    # promptFinal = f"""
+# Você é um assistente que está entrevistando um usuário para uma vaga
+# tech, o usuário deve resolver uma questão de programação. O usuário te
+# informou a questão que ele quer resolver e é a seguinte: "{question_text}".
+#  A explicação do usuário: "{transcription_text}"
+    # E o código até agora foi: "{resolution}"
+    # Dê um feedback técnico, objetivo e construtivo.
+    # """
     prompt = f"""
-Você é um assistente que está entrevistando um usuário para uma vaga
-tech, o usuário deve resolver uma questão de programação. O usuário te
-informou a questão que ele quer resolver e é a seguinte: "{question_text}".
- A explicação do usuário: "{transcription_text}"
-    E o código até agora foi: "{resolution}"
-    Dê um feedback técnico, objetivo e construtivo.
-    """
-    headers={
-        "Authorization": "Bearer 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",
-        "Content-Type": "application/json",
-      
-    }
-    print("headers", headers)
+Você é um assistente técnico que está conduzindo uma entrevista de programação com um candidato.
+O usuário está resolvendo a seguinte questão:
+"{question_text}"
+Durante a prática, ele compartilhou essa explicação:"{transcription_text}"
+E o código parcial atual é:"{resolution}"
+Forneça um **feedback oral intermediário**, como se você estivesse falando diretamente com o candidato.
+- Seja claro, breve e didático
+- Use linguagem natural, sem termos excessivamente técnicos
+- **Não inclua trechos de código**
+- Foque em **orientações, elogios e sugestões** que possam ajudar o usuário a melhorar ou continuar seu raciocínio
+- Esteja no papel de alguém que está acompanhando a prática e guiando com pequenas dicas
+"""
+
     payload = {
         "model": "deepseek/deepseek-chat:free",
         "messages": [
@@ -74,7 +89,7 @@ informou a questão que ele quer resolver e é a seguinte: "{question_text}".
     print("paylosd", payload)
     try:
         response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers={
-        "Authorization": "Bearer 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",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
       
     }, json=payload)
@@ -85,10 +100,26 @@ informou a questão que ele quer resolver e é a seguinte: "{question_text}".
         new_transcription.feedback = feedback_text
         db.session.commit()
 
-        return jsonify({
-            "transcription": transcription_text,
-            "feedback": feedback_text
-        }), 201
+        # 🔊 Converter feedback em áudio
+        audio_filename = f"feedback_{uuid.uuid4()}.mp3"
+        engine = pyttsx3.init()
+        engine.save_to_file(feedback_text, audio_filename)
+        engine.runAndWait()
+        # print("audio ", audio_filename)
+        # tts = gTTS(text=feedback_text, lang='pt-br')
+        # tts.save(audio_filename)
+
+    # 🔁 Retornar o áudio pro front
+        return send_file(
+        audio_filename,
+        as_attachment=False,
+        mimetype="audio/mpeg",
+        download_name="feedback.mp3"
+        )
+        # return jsonify({
+        #     "transcription": transcription_text,
+        #     "feedback": feedback_text
+        # }), 201
 
     except Exception as e:
         db.session.rollback()
