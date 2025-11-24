@@ -1,0 +1,45 @@
+# Python / venv
+.venv/
+venv/
+env/
+ENV/
+
+# Conda
+/conda-meta
+/Library/
+/Scripts/
+*.conda
+*.condarc
+
+# Byte-compiled / caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# VSCode / editors
+.vscode/
+.idea/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Flask / uploads
+uploads/
+instance/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+
+# Others
+*.log
+*.sqlite3
+*.db

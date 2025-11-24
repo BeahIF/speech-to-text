@@ -15,4 +15,4 @@ class Transcription(Base):
     transcription = Column(Text, nullable=False)
     resolution = Column(Text, nullable=False)
     
-    practice = relationship("Practice", backref="transcriptions")
+    # practice = relationship("Practice", backref="transcriptions")

@@ -15,6 +15,7 @@ class Practice(Base):
     status = Column(String(20), nullable=True)
     language = Column(String(50), nullable=False)
 
+    transcriptions = relationship('Transcription', backref='practice', lazy=True)
 
     questionId = Column(UUID(as_uuid=True), ForeignKey('questions.id'))
     question = relationship("Question", back_populates="practices")

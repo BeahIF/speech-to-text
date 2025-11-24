@@ -1,2 +1,17 @@
-flask
-openai-whisper
+name: prepwise
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - spacy
+  - ffmpeg
+  - pip
+  - pip:
+    - flask
+    - flask-cors
+    - python-dotenv
+    - sqlalchemy
+    - pyttsx3
+    - requests
+    - flake8
+    - git+https://github.com/openai/whisper.git
