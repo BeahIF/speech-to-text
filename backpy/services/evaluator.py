@@ -15,7 +15,7 @@ except Exception:
 
 # rubrica: espera keywords por tipo de questão (ex: algoritmos)
 DEFAULT_KEYWORDS = [
-    "complexidade", "tempo", "espaço", "O(n)", "O(n^2)", "heap", "pilha", "fila", "dfs", "bfs", "recursão"
+    "complexidade", "tempo", "espaço", "O(n)", "O(n^2)", "heap", "pilha", "fila", "dfs", "bfs", "recursão","lógica","loop","eficiente"
 ]
 
 def score_content_by_keywords(text, expected_keywords=DEFAULT_KEYWORDS):
@@ -42,6 +42,7 @@ def score_clarity(text):
     return 1
 
 def lint_python_code(code):
+    print("Linting Python code...", code)
     # usa flake8 para extrair contagem de avisos/erros
     try:
         import flake8.api.legacy as flake8
@@ -52,6 +53,7 @@ def lint_python_code(code):
         f.write(code)
         filename = f.name
     report = style_guide.check_files([filename])
+    print("Lint report total errors:", report.get_statistics)
     # report.total_errors retorna número de erros
     total = report.total_errors
     # mapear para score (0..4)
@@ -94,7 +96,7 @@ def evaluate_transcription_and_code(transcription, code, language="python", expe
 
     content_score, found, total_kw = score_content_by_keywords(transcription, expected_keywords)
     clarity_score = score_clarity(transcription)
-
+    print("Content score:", content_score, "Clarity score:", clarity_score, found, total_kw)
     text_scores = {"content": content_score, "clarity": clarity_score, "found_keywords": found, "total_keywords": total_kw}
 
     if code and language.lower() == "python":

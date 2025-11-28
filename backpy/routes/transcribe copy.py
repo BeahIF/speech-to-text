@@ -48,6 +48,7 @@ def transcribe():
     audio_file = request.files['file']
     practice_id = request.form.get('practice_id')
     resolution = request.form.get('resolution')
+    print("resolution", resolution)
 
     if not practice_id or not resolution:
         return jsonify({"error": "Campos 'practice_id' e 'resolution' são obrigatórios"}), 400

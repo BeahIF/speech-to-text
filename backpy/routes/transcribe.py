@@ -64,7 +64,7 @@ def transcribe():
         model = load_whisper()
         result = model.transcribe(audio_path, language="pt")  # ajusta se quiser detect_language
         transcription_text = result.get('text', '').strip()
-
+        print("transcription_text", transcription_text)
         practice = Practice.query.get(practice_id)
         print("practice", practice)
         if not practice:
