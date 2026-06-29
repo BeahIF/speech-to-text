@@ -1,136 +1,186 @@
 from dotenv import load_dotenv
-from flask import Blueprint, request, jsonify, current_app, send_file
+from flask import Blueprint, request, jsonify, current_app
 from db import db
 from models.practice import Practice
 from models.transcription import Transcription
-import os
-import whisper
 from werkzeug.utils import secure_filename
-import requests
-from flask_cors import CORS
 from services.evaluator import evaluate_transcription_and_code
-
-# from gtts import gTTS
-import pyttsx3
-
-from flask import send_file
+import os
 import uuid
+
+
 load_dotenv()
-transcribe_bp = Blueprint('transcribe', __name__)
-model = whisper.load_model("base")
-api_key = os.getenv("API_KEY")  # Ou o nome real da sua variável
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'uploads')
+
+transcribe_bp = Blueprint("transcribe", __name__)
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-print("acontece alguma coisa aqui", api_key)
-CORS(transcribe_bp, origins=["http://localhost:3000","http://127.0.0.1:3000"])
-ALLOWED_EXT = {'.wav', '.mp3', '.m4a', '.webm', '.ogg'}
+
+ALLOWED_EXT = {".wav", ".mp3", ".m4a", ".webm", ".ogg"}
 
 WHISPER_MODEL = None
 MODEL_NAME = os.getenv("WHISPER_MODEL", "base")
+
+
 def load_whisper():
     global WHISPER_MODEL
+
     if WHISPER_MODEL is None:
         import whisper
         WHISPER_MODEL = whisper.load_model(MODEL_NAME)
         current_app.logger.info(f"Whisper model '{MODEL_NAME}' loaded.")
+
     return WHISPER_MODEL
+
 
 def is_allowed_filename(filename):
     _, ext = os.path.splitext(filename.lower())
     return ext in ALLOWED_EXT
-@transcribe_bp.route('/transcribe', methods=['POST'])
+
+
+@transcribe_bp.route("/transcribe", methods=["POST"])
 def transcribe():
+    audio_path = None
+
     try:
-        print("entrou na rota transcribe", request.form)
-        if 'file' not in request.files:
-            return jsonify({"error": "Nenhum arquivo enviado"}), 400
+        print("[transcribe] request recebida")
 
-        audio_file = request.files['file']
-        practice_id = request.form.get('practice_id')
-        resolution = request.form.get('resolution')
+        if "file" not in request.files:
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": "MISSING_FILE",
+                    "message": "Nenhum arquivo de áudio foi enviado."
+                }
+            }), 400
 
-        if not practice_id or not resolution:
-            return jsonify({"error": "Campos 'practice_id' e 'resolution' são obrigatórios"}), 400
+        audio_file = request.files["file"]
 
-        orig_filename = secure_filename(audio_file.filename or f"audio_{uuid.uuid4()}.wav")
-        if not is_allowed_filename(orig_filename):
-                # allow but convert if necessary; for simplicity, reject unknown ext
-            return jsonify({"error": f"Tipo de arquivo não permitido: {orig_filename}"}), 400
+        practice_id = request.form.get("practice_id")
+        code = request.form.get("resolution") or request.form.get("code") or ""
+        language = request.form.get("language") or "python"
 
-        unique_name = f"{uuid.uuid4().hex}_{orig_filename}"
-        audio_path = os.path.join(UPLOAD_FOLDER, unique_name)
-        audio_file.save(audio_path)
-    
-        model = load_whisper()
-        result = model.transcribe(audio_path, language="pt")  # ajusta se quiser detect_language
-        transcription_text = result.get('text', '').strip()
-        print("transcription_text", transcription_text)
+        if not practice_id:
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": "MISSING_PRACTICE_ID",
+                    "message": "O campo practice_id é obrigatório."
+                }
+            }), 400
+
+        if not code:
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": "MISSING_CODE",
+                    "message": "O campo resolution ou code é obrigatório."
+                }
+            }), 400
+
         practice = Practice.query.get(practice_id)
-        print("practice", practice)
+
         if not practice:
-            return jsonify({"error": "Prática não encontrada"}), 404
-        question_text = practice.question.description
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": "PRACTICE_NOT_FOUND",
+                    "message": "Prática não encontrada."
+                }
+            }), 404
 
-  
+        original_filename = secure_filename(
+            audio_file.filename or f"audio_{uuid.uuid4().hex}.wav"
+        )
 
-    # Salva a transcrição na tabela intermediária
+        if not is_allowed_filename(original_filename):
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": "INVALID_AUDIO_TYPE",
+                    "message": f"Tipo de arquivo não permitido: {original_filename}"
+                }
+            }), 400
+
+        unique_name = f"{uuid.uuid4().hex}_{original_filename}"
+        audio_path = os.path.join(UPLOAD_FOLDER, unique_name)
+
+        audio_file.save(audio_path)
+
+        print(f"[transcribe] áudio salvo em {audio_path}")
+
+        whisper_model = load_whisper()
+        whisper_result = whisper_model.transcribe(audio_path, language="pt")
+
+        transcription_text = whisper_result.get("text", "").strip()
+
+        if not transcription_text:
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": "EMPTY_TRANSCRIPTION",
+                    "message": "Não foi possível transcrever o áudio. Tente gravar novamente."
+                }
+            }), 400
+
+        question_text = ""
+
+        if practice.question:
+            question_text = practice.question.description or ""
+
         new_transcription = Transcription(
             practice_id=practice_id,
             transcription=transcription_text,
-            resolution=resolution
+            resolution=code
         )
+
         db.session.add(new_transcription)
         db.session.flush()
-   
-        eval_result = evaluate_transcription_and_code(transcription_text, resolution, language='python')
 
-            # use the evaluator feedback text (join feedback sentences)
-        feedback_text = " ".join(eval_result.get("feedback", [])) or "Feedback automático gerado."
+        eval_result = evaluate_transcription_and_code(
+            question=question_text,
+            code=code,
+            transcription=transcription_text,
+            language=language
+        )
 
-    
-        # result = response.json()
-        # print("result", result)
-        # feedback_text = result["choices"][0]["message"]["content"]
+        feedback_text = eval_result.get("feedback") or "Feedback automático não disponível."
 
         new_transcription.feedback = feedback_text
+
+        practice.solution = code
+        practice.feedback = feedback_text
+        practice.status = "completed"
+
         db.session.commit()
 
-        # 🔊 Converter feedback em áudio
-        audio_filename = f"feedback_{uuid.uuid4().hex}.mp3"
-        audio_out_path = os.path.join(UPLOAD_FOLDER, audio_filename)
-        try:
-            engine = pyttsx3.init()
-            engine.save_to_file(feedback_text, audio_out_path)
-            engine.runAndWait()
-        except Exception as e:
-            current_app.logger.exception("Erro ao gerar TTS local com pyttsx3: %s", e)
-        # print("audio ", audio_filename)
-        # tts = gTTS(text=feedback_text, lang='pt-br')
-        # tts.save(audio_filename)
-
-    # 🔁 Retornar o áudio pro front
-        # return send_file(
-        # audio_filename,
-        # as_attachment=False,
-        # mimetype="audio/mpeg",
-        # download_name="feedback.mp3"
-        # )
-            return jsonify({
+        return jsonify({
+            "success": True,
+            "data": {
+                "practice_id": str(practice.id),
+                "transcription_id": str(new_transcription.id),
                 "transcription": transcription_text,
                 "feedback": feedback_text,
-                "evaluation": eval_result,
-                "tts_error":str(e)
-            }), 201
-        return send_file(audio_out_path, as_attachment=False, mimetype="audio/mpeg", download_name="feedback.mp3"), 200
+                "evaluation_success": eval_result.get("success", False)
+            },
+            "error": eval_result.get("error")
+        }), 201
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception("Erro na rota /transcribe: %s", e)
 
-        return jsonify({"error": f"Erro ao gerar feedback: {str(e)}"}), 500
-    # db.session.commit()
-    finally:
-        # opcional: cleanup de arquivos antigos se quiser (não remover o arquivo enviado imediatamente se precisar)
-        pass
-
-
+        return jsonify({
+            "success": False,
+            "data": None,
+            "error": {
+                "code": "TRANSCRIBE_FAILED",
+                "message": str(e)
+            }
+        }), 500
