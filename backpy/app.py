@@ -16,6 +16,7 @@ from models.transcription import Transcription
 from routes.question import question_bp
 from routes.transcribe import transcribe_bp
 from routes.evaluate import evaluate_bp 
+from routes.report import report_bp
 
 load_dotenv()
 app = Flask(__name__)
@@ -34,6 +35,7 @@ db.init_app(app)
 app.register_blueprint(question_bp)
 app.register_blueprint(transcribe_bp)
 app.register_blueprint(evaluate_bp)  
+app.register_blueprint(report_bp)
 
 api_key = os.getenv('API_KEY')
 # print(api_key)
@@ -77,15 +79,6 @@ def test_api():
     )
     print(response.text)
     
-    # r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-    #                   headers=headers, data=json.dumps(payload))
-    # try:
-    #     data = r.json()
-    # except Exception:
-    #     return jsonify({"error": "Resposta inválida", "raw": r.text}), 500
-    # return jsonify(data), r.status_code
-# falta um endpoint que pega o retorno do deepseek e transforma em audio 
-
 @app.route('/submit-question', methods=['POST'])
 def submit_question():
     # Receber a questão do corpo da requisição
@@ -95,11 +88,6 @@ def submit_question():
     if not question:
         return jsonify({"error": "No question provided"}), 400
 
-    
-    #aqui preciso salvar no banco de dados 
-    #depois vou chamar o whisper que fica ouvindo a pessoa
-    
-    
     
     response = {
         "question": question,
@@ -138,6 +126,7 @@ def create_practice():
         db.session.rollback()
         print("Erro ao criar prática:", str(e))
         return jsonify({"error": str(e)}), 500
+    
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
